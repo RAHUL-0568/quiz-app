@@ -8,7 +8,7 @@ export default function Page() {
         backgroundColor: "#f5f5f5",
         padding: "20px",
         borderRadius: "8px"
-    //}}>
+    }}>
       <div style={{
         width: "100%",
         maxWidth: "420px",
