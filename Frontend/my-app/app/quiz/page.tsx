@@ -49,6 +49,46 @@ export default function Quiz() {
   }, [])
 
   useEffect(() => {
+    const hasExpiring = upcomingSessions.some((s) => {
+      if (s.status !== "upcoming") return false;
+      return new Date(s.scheduled_at).getTime() - now.getTime() <= 0;
+    });
+
+    if (hasExpiring) {
+      fetch(`${API}/api/quiz/upcomingQuizzes`)
+        .then((r) => r.json())
+        .then((data) => setUpcomingSessions(data.data || []));
+    }
+  }, [now, upcomingSessions]);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        const res = await fetch(`${API}/api/quiz/upcomingQuizzes`)
+        const data = await res.json()
+        setUpcomingSessions(data.data || [])
+      } catch { setUpcomingSessions([]) }
+
+      try {
+        const token = getToken(); if (!token) return
+        const res = await fetch(`${API}/api/quiz/myRegistrations`, { headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.success) setRegistered(data.data)
+      } catch {}
+
+      try {
+        const token = getToken(); if (!token) return
+        const res = await fetch(`${API}/api/quiz/myAttempts`, { headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.success) setAttempted(data.data)
+      } catch {}
+    }
+
+    const interval = setInterval(fetchAll, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
     const fetchSubjects = async () => {
       try {
         const res = await fetch(`${API}/api/getSubjects`)
@@ -92,7 +132,16 @@ export default function Quiz() {
     return `${s}s`
   }
 
-  const isRegistrationClosed = (scheduledAt: string) => now >= new Date(new Date(scheduledAt).getTime() - 2 * 60 * 1000)
+  // Registration is HARD CLOSED 2 minutes before scheduled time
+  const isRegistrationClosed = (scheduledAt: string) =>
+    now >= new Date(new Date(scheduledAt).getTime() - 2 * 60 * 1000)
+
+  // "Closing Soon" warning shown between 10 minutes and 2 minutes before scheduled time
+  const isClosingSoon = (scheduledAt: string) => {
+    const t = new Date(scheduledAt).getTime()
+    const nowMs = now.getTime()
+    return nowMs >= t - 10 * 60 * 1000 && nowMs < t - 2 * 60 * 1000
+  }
 
   const handleRegister = (session_id: string) => {
     const token = getToken()
@@ -114,14 +163,50 @@ export default function Quiz() {
   const renderActionButton = (session: UpcomingSession) => {
     const isReg = registered.includes(session.id)
     const regClosed = isRegistrationClosed(session.scheduled_at)
+    const closingSoon = isClosingSoon(session.scheduled_at)
+
+    // --- ACTIVE (live) session ---
     if (session.status === "active") {
-      if (attempted[session.id]) return <button className="qz-btn qz-btn-blue" onClick={() => router.push(`/quiz/result/${attempted[session.id]}`)}>View Result</button>
-      if (isReg) return <button className="qz-btn qz-btn-green" onClick={() => handleJoin(session.id)}>Join Now ⚡</button>
+      if (attempted[session.id])
+        return <button className="qz-btn qz-btn-blue" onClick={() => router.push(`/quiz/result/${attempted[session.id]}`)}>View Result</button>
+      if (isReg)
+        return <button className="qz-btn qz-btn-green" onClick={() => handleJoin(session.id)}>Join Now ⚡</button>
       return <span className="qz-chip qz-chip-red">Registration Closed</span>
     }
-    if (isReg) return <span className="qz-chip qz-chip-green">✓ Registered</span>
-    if (regClosed) return <span className="qz-chip qz-chip-yellow">Closing Soon</span>
-    return <button className="qz-btn qz-btn-purple" onClick={() => handleRegister(session.id)} disabled={registering === session.id}>{registering === session.id ? "Registering…" : "Register →"}</button>
+
+    // --- UPCOMING session ---
+    if (isReg)
+      return <span className="qz-chip qz-chip-green">✓ Registered</span>
+
+    // Hard closed (within 2 min of start)
+    if (regClosed)
+      return <span className="qz-chip qz-chip-red">Registration Closed</span>
+
+    // Soft warning (between 10 min and 2 min before start)
+    if (closingSoon)
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <button
+            className="qz-btn qz-btn-purple"
+            onClick={() => handleRegister(session.id)}
+            disabled={registering === session.id}
+          >
+            {registering === session.id ? "Registering…" : "Register →"}
+          </button>
+          <span className="qz-chip qz-chip-yellow" style={{ fontSize: 10, padding: "3px 8px" }}>⚠️ Closing Soon</span>
+        </div>
+      )
+
+    // Normal open registration
+    return (
+      <button
+        className="qz-btn qz-btn-purple"
+        onClick={() => handleRegister(session.id)}
+        disabled={registering === session.id}
+      >
+        {registering === session.id ? "Registering…" : "Register →"}
+      </button>
+    )
   }
 
   if (loading) return (
@@ -193,14 +278,14 @@ export default function Quiz() {
         .badge-live { background: rgba(20,184,166,0.1); color: #0d9488; border: 1px solid rgba(20,184,166,0.25); }
         .badge-up   { background: rgba(99,102,241,0.1); color: #6366f1; border: 1px solid rgba(99,102,241,0.2); }
 
-        // .qz-live-dot { width: 7px; height: 7px; background: #14b8a6; border-radius: 50%; animation: qzpulse 1.5s infinite; }
-        // .qz-topic { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 800; color: #1e1b4b; margin-bottom: 3px; }
-        // .qz-subj { font-size: 11px; color: #d1d5db; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
-        // .qz-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-        // .qz-time { font-size: 12px; color: #9ca3af; }
-        // .qz-countdown { font-size: 13px; color: #6366f1; font-weight: 700; font-variant-numeric: tabular-nums; }
-        // .qz-live-txt { font-size: 13px; color: #0d9488; font-weight: 700; }
-        // .qz-reg { font-size: 11px; color: #d1d5db; }
+        .qz-live-dot { width: 7px; height: 7px; background: #14b8a6; border-radius: 50%; animation: qzpulse 1.5s infinite; }
+        .qz-topic { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 800; color: #1e1b4b; margin-bottom: 3px; }
+        .qz-subj { font-size: 11px; color: #d1d5db; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+        .qz-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .qz-time { font-size: 12px; color: #9ca3af; }
+        .qz-countdown { font-size: 13px; color: #6366f1; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .qz-live-txt { font-size: 13px; color: #0d9488; font-weight: 700; }
+        .qz-reg { font-size: 11px; color: #d1d5db; }
 
         /* BUTTONS */
         .qz-btn { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; transition: all 0.18s; white-space: nowrap; flex-shrink: 0; }
@@ -263,36 +348,32 @@ export default function Quiz() {
 
         <div className="qz-body">
           {/* SESSIONS */}
-          {/* SESSIONS */}
-{upcomingSessions.length === 0 ? (
-  <div style={{ marginBottom: 52 }}>
-    <div className="qz-eyebrow">Live & Scheduled</div>
-    <div className="qz-sec-title">Upcoming Battles</div>
-    <div className="qz-empty">
-      <div className="qz-empty-icon">🎯</div>
-      <div className="qz-empty-title">No battles scheduled yet</div>
-      <p className="qz-empty-sub">
-        Check back soon — new quizzes are added regularly.<br />
-      
-      </p>
-    </div>
-  </div>
-) : (
-  <div style={{ marginBottom: 52 }}>
-    <div className="qz-eyebrow">Live & Scheduled</div>
-    <div className="qz-sec-title">Upcoming Battles</div>
-    <div className="qz-sessions">
-      {upcomingSessions.map((session) => (
-        <div key={session.id} className={`qz-session-card ${session.status === "active" ? "live" : "upcoming"}`}>
-          {/* ...rest of your session card... */}
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-      
-         
+          {upcomingSessions.length > 0 && (
+            <div style={{ marginBottom: 52 }}>
+              <div className="qz-eyebrow">Live & Scheduled</div>
+              <div className="qz-sec-title">Upcoming Battles</div>
+              <div className="qz-sessions">
+                {upcomingSessions.map((session) => (
+                  <div key={session.id} className={`qz-session-card ${session.status === "active" ? "live" : "upcoming"}`}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className={`qz-session-badge ${session.status === "active" ? "badge-live" : "badge-up"}`}>
+                        {session.status === "active" ? <><span className="qz-live-dot" />Live Now</> : "⏰ Upcoming"}
+                      </div>
+                      <div className="qz-topic">{session.topic_name}</div>
+                      <div className="qz-subj">{session.subject_name}</div>
+                      <div className="qz-meta">
+                        <span className="qz-time">📅 {new Date(session.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</span>
+                        {session.status === "upcoming" && <span className="qz-countdown">⏳ {getTimeUntil(session.scheduled_at)}</span>}
+                        {session.status === "active" && <span className="qz-live-txt">🟢 In Progress</span>}
+                        <span className="qz-reg">{session.registered_count} joined</span>
+                      </div>
+                    </div>
+                    <div>{renderActionButton(session)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
