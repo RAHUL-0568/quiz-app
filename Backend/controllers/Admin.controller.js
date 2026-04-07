@@ -14,13 +14,13 @@ export const questionStatus = async(req,res)=>{
 
         return res.status(200).json({
             
-            success:"true",
+            success:true,
             message :'questions fetched succesfully',
             data:question
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(500).json({
+            success:false,
         })
     }
 }
@@ -38,13 +38,13 @@ export const questionStatusRejected = async(req,res)=>{
 
         return res.status(200).json({
             
-            success:"true",
+            success:true,
             message :'questions fetched succesfully',
             data:question
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(500).json({
+            success:false,
         })
     }
 }
@@ -86,7 +86,7 @@ export const updateStatusReject = async(req,res)=>{
 
         const question = await getQuestionsById(question_id)
         if(!question){
-            return res.status(403).json("question not found")
+            return res.status(500).json("question not found")
         }
 
         //now update status
@@ -97,8 +97,8 @@ export const updateStatusReject = async(req,res)=>{
             data:updated
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(404).json({
+            success:false,
             message:err.message
         })
     }
@@ -117,6 +117,9 @@ export const getQues = async (req,res)=>{
 
     }catch(err){
         console.error(err);
+         return res.status(500).json({
+            success:false,
+        })
         
     }
 }
@@ -131,18 +134,18 @@ export const getAllQuestionsAdmin = async(req,res)=>{
         const questions = await  getAllQuestions(filter);
 
         if(!questions|| questions.length==0){
-            return res.status(403).json("no questions found")
+            return res.status(404).json("no questions found")
         }
 
 
         return res.status(200).json({
-            success:"true",
+            success:true,
             message:"questions fetched succesfully",
             data:questions
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(500).json({
+            success:false,
         })
     }
 }
@@ -156,17 +159,17 @@ export const   updateBulk  = async(req,res)=>{
 
 
         return res.status(200).json({
-            success:"true",
+            success:true,
             message:"questions updated",
             data:questions
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(500).json({
+            success:false,
         })
     }
 }
-//approve all questions
+//delete question
 export const   deleteQuestions  = async(req,res)=>{
     const question_id= req.params.id
     try{
@@ -175,13 +178,13 @@ export const   deleteQuestions  = async(req,res)=>{
 
 
         return res.status(200).json({
-            success:"true",
+            success:true,
             message:"questions updated",
             data:questions
         })
     }catch(err){
-        return res.status(403).json({
-            success:"false",
+        return res.status(500).json({
+            success:false,
         })
     }
 }

@@ -1,5 +1,5 @@
 import {changePass, clearOtp, getUserByOtp, insertOtp, newUser,userByEmail} from '../models/user.model.js'
-import bcrypt, { compare } from"bcrypt"
+import bcrypt from"bcrypt"
 import jwt  from "jsonwebtoken"
 import { uploadOnCloudinary } from '../utils/cloudinary.utils.js'
 
@@ -23,12 +23,7 @@ if (!name || !email || !password) {
 }
     // for uploads
      const coverImageLocalPath =req.files?.profile_picture?.[0]?.path;
-    if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and password are required"
-            });
-        }
+ 
      let profile_picture = "";
 
     if (coverImageLocalPath) {
@@ -37,7 +32,7 @@ if (!name || !email || !password) {
       profile_picture = uploaded?.secure_url || "";
       }
 
-      const verification_code = Math.floor(10000 +Math.random()*10000).toString();
+      const verification_code = Math.floor(10000 +Math.random()*900000).toString();
 
         const user = await newUser(name, email, password, profile_picture,verification_code, null);
 
@@ -53,7 +48,6 @@ if (!name || !email || !password) {
   process.env.JWT_SECRET,
   { expiresIn: "1d" }
 );
-console.log("generated token:", accesToken)
 
 // res.cookie("session_token", accesToken, {
 //   httpOnly: false, // so JS can read it
@@ -170,6 +164,7 @@ export const userLogin = async (req, res) => {
 
   } catch (err) {
     console.error(err);
+    return res.status(500).json({ success: false, message: "Server error"})
   }
 };
 
@@ -193,8 +188,7 @@ export const forgotPassword = async (req, res) => {
 
     
     
-    res.json({message: `Reset code sent to ${email} `,
-    data:user});
+    res.json({message: `Reset code sent to ${email} `});
   } catch (err) {
     res.status(500).json(err.message);
   }
@@ -223,35 +217,36 @@ export const resetPassword = async (req, res) => {
 
 
 // verify email 
+// ✅ After
+export const resendCode = async (req, res) => {
+    const { email } = req.body
 
-export const resendCode = async (req,res)=>{
-    const {email}= req.body
-
-    const user = await userByEmail(email)
-
-    if(!user ){
-        return res.status(403).json({
-            success:false,
-            message:"user not found"
-        })
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required" })
     }
-    if (user.verification_code === null) {
-  return res.status(400).json({
-    message: "User is already verified"
-  });
-}
 
-    const code = Math.floor(100000 +Math.random() *900000 ).toString()
+    try {
+        const user = await userByEmail(email)
 
-     await insertOtp(email,code)
-     
-     await senderVerificationCode(email,code)
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" })
+        }
 
+        if (user.verification_code === null) {
+            return res.status(400).json({ success: false, message: "User is already verified" })
+        }
 
-return res.status(200).json({ success: true, message: "Verification email sent" });
+        const code = Math.floor(100000 + Math.random() * 900000).toString()
 
+        await insertOtp(email, code)
+        await senderVerificationCode(email, code)
 
+        return res.status(200).json({ success: true, message: "Verification email sent" })
 
+    } catch (err) {
+        console.error("resendCode error:", err)
+        return res.status(500).json({ success: false, message: "Server error" })
+    }
 }
 
 
